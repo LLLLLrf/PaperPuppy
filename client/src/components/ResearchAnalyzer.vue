@@ -117,11 +117,57 @@
     <div v-if="error" class="error">
       <p>{{ error }}</p>
     </div>
+    
+    <!-- 近一周热点文章展示 -->
+    <div class="recent-papers-section">
+      <div class="papers-header">
+        <h2>
+          <span @click="togglePaperSource" class="source-toggle">
+            {{ currentPaperSource === 'openalex' ? 'OpenAlex' : 'arXiv' }}
+            <span class="toggle-arrow">▼</span>
+          </span>
+          近一周热点文章
+        </h2>
+      </div>
+      
+      <div v-if="isLoadingRecentPapers" class="loading">
+        <p>正在加载热点文章...</p>
+        <div class="spinner"></div>
+      </div>
+      
+      <div v-else-if="recentPapersError" class="error">
+        <p>{{ recentPapersError }}</p>
+      </div>
+      
+      <div v-else-if="(currentPaperSource === 'openalex' && recentOpenAlexPapers.length === 0) || (currentPaperSource === 'arxiv' && recentArxivPapers.length === 0)" class="no-data">
+        <p>暂无热点文章数据</p>
+      </div>
+      
+      <div v-else class="papers-grid">
+        <div 
+          v-for="(paper, index) in (currentPaperSource === 'openalex' ? recentOpenAlexPapers : recentArxivPapers)" 
+          :key="index" 
+          class="paper-card"
+        >
+          <h3>
+            <a :href="paper.url" target="_blank" rel="noopener noreferrer" class="paper-link">
+              {{ paper.title }}
+            </a>
+          </h3>
+          <p class="authors">{{ paper.authors }}</p>
+          <div class="paper-meta">
+            <span v-if="paper.published || paper.date" class="date">{{ paper.published || paper.date }}</span>
+            <span v-if="paper.publication || paper.category" class="category">{{ paper.publication || paper.category }}</span>
+            <span v-if="currentPaperSource === 'openalex' && paper.citations" class="citations">引用量: {{ paper.citations }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import html2pdf from 'html2pdf.js'
@@ -147,8 +193,10 @@ const currentLanguage = ref('en') // 当前显示的语言
 
 // 近一周热点文章相关数据
 const recentArxivPapers = ref([])
+const recentOpenAlexPapers = ref([])
 const isLoadingRecentPapers = ref(false)
 const recentPapersError = ref('')
+const currentPaperSource = ref('openalex') // 默认显示OpenAlex
 
 // 计算属性
 const formattedSummary = computed(() => {
@@ -1037,6 +1085,88 @@ const translateSummary = async () => {
     isTranslating.value = false
   }
 }
+
+// 获取近一周OpenAlex热点文章
+const fetchRecentOpenAlexPapers = async () => {
+  isLoadingRecentPapers.value = true
+  recentPapersError.value = ''
+  
+  try {
+    // 调用后端API获取近一周热点文章
+    const response = await fetch('http://localhost:3001/api/openalex/recent', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || '获取OpenAlex热点文章失败')
+    }
+    
+    recentOpenAlexPapers.value = data.papers
+  } catch (err) {
+    console.error('Error fetching OpenAlex papers:', err)
+    recentPapersError.value = err.message || '获取OpenAlex热点文章失败'
+  } finally {
+    isLoadingRecentPapers.value = false
+  }
+}
+
+// 切换论文源
+const togglePaperSource = () => {
+  if (currentPaperSource.value === 'openalex') {
+    currentPaperSource.value = 'arxiv'
+    if (recentArxivPapers.value.length === 0) {
+      fetchRecentArxivPapers()
+    }
+  } else {
+    currentPaperSource.value = 'openalex'
+    if (recentOpenAlexPapers.value.length === 0) {
+      fetchRecentOpenAlexPapers()
+    }
+  }
+}
+
+// 获取近一周arXiv热点文章
+const fetchRecentArxivPapers = async () => {
+  isLoadingRecentPapers.value = true
+  recentPapersError.value = ''
+  
+  try {
+    // 调用后端API获取近一周热点文章
+    const response = await fetch('http://localhost:3001/api/arxiv/recent', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || '获取arXiv热点文章失败')
+    }
+    
+    recentArxivPapers.value = data.papers
+  } catch (err) {
+    console.error('Error fetching recent arXiv papers:', err)
+    recentPapersError.value = err.message || '获取热点文章时发生未知错误'
+  } finally {
+    isLoadingRecentPapers.value = false
+  }
+}
+
+// 组件挂载时获取默认源的论文
+onMounted(() => {
+  if (currentPaperSource.value === 'openalex') {
+    fetchRecentOpenAlexPapers()
+  } else {
+    fetchRecentArxivPapers()
+  }
+})
 </script>
 
 <style scoped>
@@ -1067,7 +1197,7 @@ const translateSummary = async () => {
 }
 
 .brand-name {
-  height: 60px;
+  height: 120px;
   width: auto;
   object-fit: contain;
 }
@@ -1228,46 +1358,94 @@ const translateSummary = async () => {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  text-align: left;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.paper-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .paper-card h3 {
   margin-top: 0;
-  color: #333;
+  margin-bottom: 10px;
   font-size: 18px;
+  color: #333;
 }
 
-.authors {
+.paper-card .authors {
+  margin-bottom: 15px;
+  font-size: 14px;
   color: #666;
-  font-style: italic;
-  margin: 5px 0;
-}
-
-.abstract {
-  color: #555;
   line-height: 1.5;
-  margin: 10px 0;
 }
 
-.paper-meta {
+.paper-card .paper-meta {
   display: flex;
   justify-content: space-between;
-  margin-top: 15px;
-  font-size: 14px;
+  align-items: center;
+  font-size: 12px;
+  color: #999;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
 }
 
-.year {
-  background: #e8f4f1;
-  padding: 3px 8px;
-  border-radius: 4px;
+.paper-card .paper-meta .date {
+  margin-right: 4px;
+}
+
+.recent-papers-section {
+  margin-top: 40px;
+}
+
+.recent-papers-section h2 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.papers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.no-data {
+  text-align: center;
+  padding: 30px;
+  color: #666;
+}
+
+.papers-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.source-toggle {
+  cursor: pointer;
   color: #4ca3ce;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.3s;
 }
 
-.consistency {
-  background: #f0f8ff;
-  padding: 3px 8px;
-  border-radius: 4px;
-  color: #4169e1;
+.source-toggle:hover {
+  color: #359c6d;
+  text-decoration: underline;
+}
+
+.toggle-arrow {
+  font-size: 12px;
+  transition: transform 0.3s;
+}
+
+.paper-meta .citations {
+  color: #4696be;
+  font-weight: bold;
+  margin-left: auto;
 }
 
 .export-section {

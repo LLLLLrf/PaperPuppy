@@ -2,8 +2,9 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { searchPapers: searchArxivPapers } = require('./arxivClient');
-const { searchPapers: searchScholarPapers } = require('./googleScholarClient');
+const { searchPapers: searchOpenAlexPapers } = require('./openAlexClient');
 const { analyzePapers, evaluateConsistency, calculateKeywordFrequency, validateKeyTerms } = require('./chatAnywhereClient');
+const { getRecentPapers: getRecentOpenAlexPapers } = require('./openAlexClient');
 
 const app = express();
 const PORT = process.env.PORT || 3001; // 修改端口为3001
@@ -31,16 +32,16 @@ app.get('/api/search', async (req, res) => {
     // 调整分配比例，确保有足够的文本数据提取关键词
     const totalCount = parseInt(maxResults) || 10;
     const arxivCount = Math.max(4, Math.round(totalCount * 0.2));
-    const scholarCount = Math.max(12, Math.round(totalCount * 0.8));
+    const openAlexCount = Math.max(12, Math.round(totalCount * 0.8));
     
-    // 并行从arXiv和Google Scholar获取论文
-    const [arxivPapers, scholarPapers] = await Promise.all([
+    // 并行从arXiv和OpenAlex获取论文
+    const [arxivPapers, openAlexPapers] = await Promise.all([
       searchArxivPapers(query, arxivCount),
-      searchScholarPapers(query, scholarCount)
+      searchOpenAlexPapers(query, openAlexCount)
     ]);
     
     // 合并结果
-    const papers = [...arxivPapers, ...scholarPapers];
+    const papers = [...arxivPapers, ...openAlexPapers];
     
     // 按年份降序排序（如果有年份的话）
     papers.sort((a, b) => {
@@ -56,7 +57,7 @@ app.get('/api/search', async (req, res) => {
       total: papers.length,
       sources: {
         arxiv: arxivPapers.length,
-        googleScholar: scholarPapers.length
+        openAlex: openAlexPapers.length
       }
     });
   } catch (error) {
@@ -239,25 +240,39 @@ app.post('/api/translate', async (req, res) => {
 // 获取近一周热点文章的API路由
 app.get('/api/arxiv/recent', async (req, res) => {
   try {
-    // 计算一周前的日期
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
     // 使用arxivClient获取最近的论文，按提交日期排序
-    const recentPapers = await searchArxivPapers('', 10);
+    const recentPapers = await searchArxivPapers('', 30);
     
-    // 过滤出近一周的文章
-    const filteredPapers = recentPapers.filter(paper => {
-      const paperDate = new Date(paper.published);
-      return paperDate >= oneWeekAgo;
-    });
-    
+    // 暂时不进行日期过滤，先查看是否能获取到论文数据
     res.json({
       success: true,
-      papers: filteredPapers
+      papers: recentPapers
     });
   } catch (error) {
     console.error('Error fetching recent arXiv papers:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 获取近一周OpenAlex热点文章的API路由（按引用量排序）
+app.get('/api/openalex/recent', async (req, res) => {
+  try {
+    console.log('=== OpenAlex Recent API Request ===');
+    
+    // 使用OpenAlex API获取近一周计算机领域被引用最多的论文
+    const recentPapers = await getRecentOpenAlexPapers(30);
+    
+    console.log(`Returning ${recentPapers.length} top papers`);
+    
+    res.json({
+      success: true,
+      papers: recentPapers
+    });
+  } catch (error) {
+    console.error('Error fetching recent OpenAlex papers:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -273,7 +288,8 @@ app.get('/api/docs', (req, res) => {
       'GET /api/search': '搜索论文',
       'POST /api/analyze': '分析论文',
       'POST /api/translate': '翻译文本',
-      'GET /api/arxiv/recent': '获取近一周热点文章'
+      'GET /api/arxiv/recent': '获取近一周arXiv热点文章',
+      'GET /api/openalex/recent': '获取近一周OpenAlex热点文章（按引用量排序）'
     }
   });
 });

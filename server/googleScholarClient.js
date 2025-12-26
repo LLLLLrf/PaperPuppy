@@ -69,13 +69,13 @@ function parseScholarResponse(htmlData) {
   const $ = cheerio.load(htmlData);
   
   // 查找所有文章容器
-  $('.gs_r.gs_or.gs_scl').each((index, element) => {
+  $('div.gs_r').each((index, element) => {
     const paper = {
       source: 'Google Scholar'
     };
     
     // 提取标题和链接
-    const titleElement = $(element).find('.gs_rt');
+    const titleElement = $(element).find('h3.gs_rt');
     if (titleElement.length) {
       paper.title = titleElement.text().trim();
       const linkElement = titleElement.find('a');
@@ -85,7 +85,7 @@ function parseScholarResponse(htmlData) {
     }
     
     // 提取作者信息
-    const authorElement = $(element).find('.gs_a');
+    const authorElement = $(element).find('div.gs_a');
     if (authorElement.length) {
       const authorText = authorElement.text();
       const parts = authorText.split('-');
@@ -104,7 +104,7 @@ function parseScholarResponse(htmlData) {
     }
     
     // 提取摘要
-    const abstractElement = $(element).find('.gs_rs');
+    const abstractElement = $(element).find('div.gs_rs');
     if (abstractElement.length) {
       paper.abstract = abstractElement.text().trim();
       // 去除可能的省略号和截断标记
@@ -113,7 +113,7 @@ function parseScholarResponse(htmlData) {
     }
     
     // 提取引用信息
-    const citationElement = $(element).find('.gs_fl a[href*="cites="]');
+    const citationElement = $(element).find('div.gs_fl a[href*="cites="]');
     if (citationElement.length) {
       const citationText = citationElement.text();
       const citationMatch = citationText.match(/(\d+)/);
@@ -123,7 +123,7 @@ function parseScholarResponse(htmlData) {
     }
     
     // 提取PDF链接
-    const pdfElement = $(element).find('.gs_ggs a');
+    const pdfElement = $(element).find('div.gs_ggs a');
     if (pdfElement.length) {
       paper.pdf_url = pdfElement.attr('href');
     }
