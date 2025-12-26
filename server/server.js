@@ -1,0 +1,287 @@
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+const { searchPapers: searchArxivPapers } = require('./arxivClient');
+const { searchPapers: searchScholarPapers } = require('./googleScholarClient');
+const { analyzePapers, evaluateConsistency, calculateKeywordFrequency, validateKeyTerms } = require('./chatAnywhereClient');
+
+const app = express();
+const PORT = process.env.PORT || 3001; // 修改端口为3001
+
+// 中间件
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  credentials: true
+}));
+app.use(express.json());
+
+// API路由
+app.get('/api/search', async (req, res) => {
+  const { query, maxResults = 10 } = req.query;
+  
+  if (!query) {
+    return res.status(400).json({
+      success: false,
+      error: 'Query parameter is required'
+    });
+  }
+  
+  try {
+    // 根据maxResults参数分配不同来源的论文数量
+    // 调整分配比例，确保有足够的文本数据提取关键词
+    const totalCount = parseInt(maxResults) || 10;
+    const arxivCount = Math.max(4, Math.round(totalCount * 0.2));
+    const scholarCount = Math.max(12, Math.round(totalCount * 0.8));
+    
+    // 并行从arXiv和Google Scholar获取论文
+    const [arxivPapers, scholarPapers] = await Promise.all([
+      searchArxivPapers(query, arxivCount),
+      searchScholarPapers(query, scholarCount)
+    ]);
+    
+    // 合并结果
+    const papers = [...arxivPapers, ...scholarPapers];
+    
+    // 按年份降序排序（如果有年份的话）
+    papers.sort((a, b) => {
+      if (!a.year) return 1;
+      if (!b.year) return -1;
+      return parseInt(b.year) - parseInt(a.year);
+    });
+    
+    // 即使没有找到论文也返回成功，但data为空数组
+    res.json({
+      success: true,
+      data: papers,
+      total: papers.length,
+      sources: {
+        arxiv: arxivPapers.length,
+        googleScholar: scholarPapers.length
+      }
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/analyze', async (req, res) => {
+  console.log('=== /api/analyze ENDPOINT REQUEST RECEIVED ===');
+  console.log('Request body:', {
+    papersCount: req.body.papers?.length || 0,
+    query: req.body.query?.substring(0, 50) + (req.body.query?.length > 50 ? '...' : ''),
+    language: req.body.language
+  });
+  
+  const { papers, query, language = 'en' } = req.body;
+  
+  if (!papers || !Array.isArray(papers)) {
+    console.log('✗ Bad request: Papers array is required');
+    return res.status(400).json({
+      success: false,
+      error: 'Papers array is required'
+    });
+  }
+  
+  // 不再硬性限制论文数量，而是依赖analyzePapers函数内部的分批处理机制
+  // 但为了性能考虑，仍然设置一个合理的上限
+  const limitedPapers = papers.slice(0, 30);
+  console.log(`Processing ${limitedPapers.length} papers (out of ${papers.length} total)`);
+  
+  try {
+    console.log('1. 开始调用 analyzePapers...');
+    // 使用ChatAnywhere API分析论文（现在支持分批处理）
+    const summary = await analyzePapers(limitedPapers, language);
+    console.log('✓ analyzePapers completed!');
+    console.log('   综述长度:', summary.length);
+    console.log('   内存使用情况:', JSON.stringify(process.memoryUsage()));
+    
+    console.log('2. 开始调用 evaluateConsistency...');
+    // 评估论文一致性和相关性
+    const evaluatedPapers = await evaluateConsistency(limitedPapers, query || '');
+    console.log('✓ evaluateConsistency completed!');
+    console.log('   评估后论文数量:', evaluatedPapers.length);
+    
+    // 计算关键词频率（引用统计）
+    console.log('3. 开始调用 calculateKeywordFrequency...');
+    const keywordFrequency = calculateKeywordFrequency(limitedPapers);
+    console.log('✓ calculateKeywordFrequency completed!');
+    console.log('   关键词数量:', keywordFrequency.length);
+    
+    // 验证关键术语匹配
+    console.log('4. 开始调用 validateKeyTerms...');
+    const keyTermValidation = validateKeyTerms(limitedPapers, query || '');
+    console.log('✓ validateKeyTerms completed!');
+    console.log('   匹配率:', keyTermValidation.matchRate);
+    
+    // 生成词云数据 - 增加词的数量以减少稀疏感
+    console.log('5. 开始生成词云数据...');
+    const wordCloudData = keywordFrequency.slice(0, 40).map(item => [item.keyword, item.count]);
+    console.log('✓ 词云数据生成完成！');
+    console.log('   词云数据点数量:', wordCloudData.length);
+    
+    // 生成置信度评分（基于多个因子）
+    console.log('6. 开始生成置信度评分...');
+    // 综合考虑一致性、相关性、关键词匹配率等因素
+    const avgConsistency = evaluatedPapers.reduce((sum, paper) => sum + paper.consistency, 0) / evaluatedPapers.length;
+    const avgRelevance = evaluatedPapers.reduce((sum, paper) => sum + paper.relevance, 0) / evaluatedPapers.length;
+    const termMatchRate = keyTermValidation.matchRate;
+    
+    // 动态调整权重，基于不同因素的可靠性
+    // 当关键词匹配率较高时，增加其权重
+    const keywordWeight = Math.min(0.5, termMatchRate / 100 * 0.6);
+    const consistencyWeight = 0.3 + (avgConsistency > 90 ? 0.1 : avgConsistency > 80 ? 0.05 : 0);
+    const relevanceWeight = 0.4 + (avgRelevance > 90 ? 0.1 : avgRelevance > 80 ? 0.05 : 0);
+    
+    // 确保权重总和为1
+    const totalWeight = keywordWeight + consistencyWeight + relevanceWeight;
+    const normalizedKeywordWeight = keywordWeight / totalWeight;
+    const normalizedConsistencyWeight = consistencyWeight / totalWeight;
+    const normalizedRelevanceWeight = relevanceWeight / totalWeight;
+    
+    // 加权计算置信度评分
+    let confidenceScore = 0;
+    // 确保所有计算值都是有效的数字
+    if (!isNaN(avgConsistency) && !isNaN(avgRelevance) && !isNaN(termMatchRate)) {
+      confidenceScore = Math.round(
+        (avgConsistency * normalizedConsistencyWeight) + 
+        (avgRelevance * normalizedRelevanceWeight) + 
+        (termMatchRate * normalizedKeywordWeight)
+      );
+    } else {
+      // 如果任何计算值无效，使用默认置信度
+      confidenceScore = 50;
+    }
+    
+    // 应用幻觉抑制因子
+    // 当关键词匹配率较低时，降低整体置信度
+    const hallucinationSuppressionFactor = !isNaN(termMatchRate) ? 
+      (termMatchRate < 30 ? 0.8 : termMatchRate < 50 ? 0.9 : 1.0) : 1.0;
+    
+    const adjustedConfidenceScore = Math.max(0, Math.min(100, 
+      Math.round(confidenceScore * hallucinationSuppressionFactor)));
+    
+    console.log('✓ 置信度评分生成完成！');
+    console.log('   置信度评分:', adjustedConfidenceScore);
+    
+    console.log('7. 准备发送响应...');
+    
+    const responseData = {
+      success: true,
+      data: {
+        summary,
+        confidenceScore: adjustedConfidenceScore,
+        papers: evaluatedPapers,
+        keywordFrequency,
+        keyTermValidation,
+        wordCloudData
+      }
+    };
+    
+    console.log('✓ Response data prepared successfully');
+    console.log('   Response structure:', Object.keys(responseData.data));
+    
+    // 发送响应
+    res.json(responseData);
+    console.log('=== /api/analyze RESPONSE SENT SUCCESSFULLY ===');
+  } catch (error) {
+    console.error('=== ERROR IN /api/analyze ENDPOINT ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=== /api/analyze ERROR END ===');
+    
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 基本路由
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Research Analyzer Backend Server',
+    version: '1.0.0'
+  });
+});
+
+// 翻译API路由
+app.post('/api/translate', async (req, res) => {
+  const { text, targetLang = 'zh' } = req.body;
+  
+  if (!text) {
+    return res.status(400).json({
+      success: false,
+      error: 'Text parameter is required'
+    });
+  }
+  
+  try {
+    const { translateText } = require('./chatAnywhereClient');
+    const translatedText = await translateText(text, targetLang);
+    
+    res.json({
+      success: true,
+      translatedText
+    });
+  } catch (error) {
+    console.error('Translation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 获取近一周热点文章的API路由
+app.get('/api/arxiv/recent', async (req, res) => {
+  try {
+    // 计算一周前的日期
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    // 使用arxivClient获取最近的论文，按提交日期排序
+    const recentPapers = await searchArxivPapers('', 10);
+    
+    // 过滤出近一周的文章
+    const filteredPapers = recentPapers.filter(paper => {
+      const paperDate = new Date(paper.published);
+      return paperDate >= oneWeekAgo;
+    });
+    
+    res.json({
+      success: true,
+      papers: filteredPapers
+    });
+  } catch (error) {
+    console.error('Error fetching recent arXiv papers:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API文档路由
+app.get('/api/docs', (req, res) => {
+  res.json({
+    message: 'Research Analyzer API Documentation',
+    endpoints: {
+      'GET /api/search': '搜索论文',
+      'POST /api/analyze': '分析论文',
+      'POST /api/translate': '翻译文本',
+      'GET /api/arxiv/recent': '获取近一周热点文章'
+    }
+  });
+});
+
+// 启动服务器
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`API Documentation: http://localhost:${PORT}/api/docs`);
+});
+
+module.exports = app;

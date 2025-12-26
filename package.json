@@ -1,0 +1,18 @@
+{
+  "name": "assignment",
+  "version": "1.0.0",
+  "description": "本项目旨在构建一个自动化研究现状分析与\"去幻觉\"系统，能够针对任意研究主题自动检索论文（如 arXiv、Scholar），抓取标题与摘要，并利用 GPT 进行多文献交叉比对与综合总结。",
+  "main": "test-system.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "https-proxy-agent": "^7.0.6",
+    "jspdf": "^2.5.1"
+  }
+}
