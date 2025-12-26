@@ -140,7 +140,7 @@ function parseArxivResponse(xmlData) {
  * @param {number} retryCount - 重试次数
  * @returns {Promise<Array>} 论文数组
  */
-async function searchPapers(searchTerm, maxResults = 10, retryCount = 3) {
+async function searchPapers(searchTerm, maxResults = 30, retryCount = 3) {
   try {
     const queryUrl = buildArxivQuery(searchTerm, maxResults);
     console.log(`Searching arXiv with URL: ${queryUrl}`);

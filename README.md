@@ -1,8 +1,8 @@
-# PaperPuppy - 自动化研究现状收集与去幻觉系统
+# <img src="assets/logo.png" width="46px"> PaperPuppy - 自动化研究现状收集与去幻觉系统
 
-![PaperPuppy Logo](assets/logo.png)
-
-![PaperPuppy Name](assets/paperpuppy.png)
+<div align="center">
+  <img src="assets/paperpuppy.png" width="56%">
+</div>
 
 
 
@@ -35,6 +35,35 @@
 - AI 模型：GPT-3.5-Turbo (ChatAnywhere API)
 - 文献检索：arXiv API, Google Scholar API
 - 可视化：词云、时间轴、主题图谱
+
+## 系统架构
+
+```mermaid
+%%{
+  init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor": "#e3f2fd",
+    "primaryTextColor": "#0d47a1",
+    "primaryBorderColor": "#1976d2",
+    "edgeLabelBackground": "#ffffff",
+    "tertiaryColor": "#bbdefb",
+    "fontSize": "14px",
+    "lineColor": "#1565c0",
+    "background": "#ffffff"
+  }
+  }
+}%%
+graph LR
+    Vue[Vue前端] -->|HTTP请求| Express[Express后端]
+    Express --> Service[文献检索服务]
+    Express --> AI[ChatAnywhere AI分析]
+    
+    subgraph Service [文献检索服务]
+        arxiv[arXiv API]
+        scholar[Scholar API]
+    end
+```
 
 ## 目录结构
 
@@ -82,7 +111,7 @@
 1. 克隆项目仓库：
 ```bash
 git clone <repository-url>
-cd assignment
+cd PaperPuppy
 ```
 
 2. 设置环境变量：
@@ -138,25 +167,6 @@ POST /api/analyze
 - query: 搜索关键词（可选）
 ```
 
-## 系统架构
-
-```
-┌─────────────┐    HTTP    ┌─────────────┐
-│   Vue前端   │ ──────────▶ │ Express后端 │
-└─────────────┘             └─────────────┘
-                                  │
-                        ┌─────────┴─────────┐
-                        ▼                   ▼
-            ┌───────────────────────┐    ┌─────────────┐
-            │    文献检索服务        │    │ ChatAnywhere│
-            │ ┌─────────────┐       │    │ AI分析      │
-            │ │  arXiv API  │       │    └─────────────┘
-            │ └─────────────┘       │
-            │ ┌─────────────┐       │
-            │ │ Scholar API │       │
-            │ └─────────────┘       │
-            └───────────────────────┘
-```
 
 ## 幻觉控制机制详解
 
