@@ -115,8 +115,13 @@ const xAxisLabels = computed(() => {
   const { min, max } = getYearRange()
   const labels = []
   
+  // 当所有年份相同时，直接返回单个年份
+  if (min === max) {
+    return [min]
+  }
+  
   // 生成年份标签，最多显示10个
-  const interval = Math.ceil((max - min) / 9)
+  const interval = Math.max(1, Math.ceil((max - min) / 9)) // 确保interval至少为1
   for (let year = min; year <= max; year += interval) {
     labels.push(year)
   }
@@ -153,6 +158,11 @@ const getConsistencyRange = () => {
 const yAxisLabels = computed(() => {
   const { min, max } = getConsistencyRange()
   const labels = []
+  
+  // 当所有分数相同时，直接返回单个分数
+  if (min === max) {
+    return [min]
+  }
   
   // 如果范围太小，设置固定的间隔
   const range = max - min

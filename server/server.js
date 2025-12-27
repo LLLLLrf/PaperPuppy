@@ -2,9 +2,9 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { searchPapers: searchArxivPapers } = require('./arxivClient');
-const { searchPapers: searchOpenAlexPapers } = require('./openAlexClient');
+const { searchPapers: searchGoogleScholarPapers } = require('./googleScholarClient');
 const { analyzePapers, evaluateConsistency, calculateKeywordFrequency, validateKeyTerms } = require('./chatAnywhereClient');
-const { getRecentPapers: getRecentOpenAlexPapers } = require('./openAlexClient');
+const { getRecentPapers: getRecentOpenAlexPapers } = require('./openAlexClient'); // 保留用于热点文章
 
 const app = express();
 const PORT = process.env.PORT || 3001; // 修改端口为3001
@@ -28,20 +28,18 @@ app.get('/api/search', async (req, res) => {
   }
   
   try {
-    // 根据maxResults参数分配不同来源的论文数量
-    // 调整分配比例，确保有足够的文本数据提取关键词
-    const totalCount = parseInt(maxResults) || 10;
-    const arxivCount = Math.max(4, Math.round(totalCount * 0.2));
-    const openAlexCount = Math.max(12, Math.round(totalCount * 0.8));
+    // 固定分配论文数量：4篇arXiv和12篇Google Scholar
+    const arxivCount = 4;
+    const googleScholarCount = 12;
     
-    // 并行从arXiv和OpenAlex获取论文
-    const [arxivPapers, openAlexPapers] = await Promise.all([
+    // 并行从arXiv和Google Scholar获取论文
+    const [arxivPapers, googleScholarPapers] = await Promise.all([
       searchArxivPapers(query, arxivCount),
-      searchOpenAlexPapers(query, openAlexCount)
+      searchGoogleScholarPapers(query, googleScholarCount)
     ]);
     
     // 合并结果
-    const papers = [...arxivPapers, ...openAlexPapers];
+    const papers = [...arxivPapers, ...googleScholarPapers];
     
     // 按年份降序排序（如果有年份的话）
     papers.sort((a, b) => {
@@ -57,7 +55,7 @@ app.get('/api/search', async (req, res) => {
       total: papers.length,
       sources: {
         arxiv: arxivPapers.length,
-        openAlex: openAlexPapers.length
+        googleScholar: googleScholarPapers.length
       }
     });
   } catch (error) {
@@ -71,16 +69,20 @@ app.get('/api/search', async (req, res) => {
 
 app.post('/api/analyze', async (req, res) => {
   console.log('=== /api/analyze ENDPOINT REQUEST RECEIVED ===');
-  console.log('Request body:', {
-    papersCount: req.body.papers?.length || 0,
-    query: req.body.query?.substring(0, 50) + (req.body.query?.length > 50 ? '...' : ''),
-    language: req.body.language
-  });
+  
+  // 创建日志数组，用于收集处理过程中的关键信息
+  const logs = [];
+  const addLog = (message) => {
+    console.log(message);
+    logs.push(message);
+  };
+  
+  addLog('Request body: { papersCount: ' + (req.body.papers?.length || 0) + ', query: \'' + (req.body.query?.substring(0, 50) + (req.body.query?.length > 50 ? '...' : '')) + '\', language: \'' + (req.body.language || 'en') + '\' }');
   
   const { papers, query, language = 'en' } = req.body;
   
   if (!papers || !Array.isArray(papers)) {
-    console.log('✗ Bad request: Papers array is required');
+    addLog('✗ Bad request: Papers array is required');
     return res.status(400).json({
       success: false,
       error: 'Papers array is required'
@@ -90,42 +92,52 @@ app.post('/api/analyze', async (req, res) => {
   // 不再硬性限制论文数量，而是依赖analyzePapers函数内部的分批处理机制
   // 但为了性能考虑，仍然设置一个合理的上限
   const limitedPapers = papers.slice(0, 30);
-  console.log(`Processing ${limitedPapers.length} papers (out of ${papers.length} total)`);
+  addLog(`Processing ${limitedPapers.length} papers (out of ${papers.length} total)`);
   
   try {
-    console.log('1. 开始调用 analyzePapers...');
+    addLog('1. 开始调用 analyzePapers...');
     // 使用ChatAnywhere API分析论文（现在支持分批处理）
-    const summary = await analyzePapers(limitedPapers, language);
-    console.log('✓ analyzePapers completed!');
-    console.log('   综述长度:', summary.length);
-    console.log('   内存使用情况:', JSON.stringify(process.memoryUsage()));
+    let summary;
+    try {
+      summary = await analyzePapers(limitedPapers, language);
+      addLog('✓ analyzePapers completed!');
+      addLog('   综述长度: ' + summary.length);
+    } catch (error) {
+      console.error('✗ analyzePapers failed:', error.message);
+      addLog('✗ analyzePapers failed: ' + error.message);
+      // 如果analyzePapers抛出异常，仍然继续执行并返回错误信息
+      summary = language === 'zh' ? 
+        `综述生成失败：${error.message}` : 
+        `Survey generation failed: ${error.message}`;
+    }
+    addLog('   内存使用情况: ' + JSON.stringify(process.memoryUsage()));
     
-    console.log('2. 开始调用 evaluateConsistency...');
+    addLog('2. 开始调用 evaluateConsistency...');
     // 评估论文一致性和相关性
     const evaluatedPapers = await evaluateConsistency(limitedPapers, query || '');
-    console.log('✓ evaluateConsistency completed!');
-    console.log('   评估后论文数量:', evaluatedPapers.length);
+    addLog('✓ evaluateConsistency completed!');
+    addLog('   评估后论文数量: ' + evaluatedPapers.length);
     
     // 计算关键词频率（引用统计）
-    console.log('3. 开始调用 calculateKeywordFrequency...');
+    addLog('3. 开始调用 calculateKeywordFrequency...');
     const keywordFrequency = calculateKeywordFrequency(limitedPapers);
-    console.log('✓ calculateKeywordFrequency completed!');
-    console.log('   关键词数量:', keywordFrequency.length);
+    addLog('✓ calculateKeywordFrequency completed!');
+    addLog('   关键词数量: ' + keywordFrequency.length);
     
     // 验证关键术语匹配
-    console.log('4. 开始调用 validateKeyTerms...');
+    addLog('4. 开始调用 validateKeyTerms...');
     const keyTermValidation = validateKeyTerms(limitedPapers, query || '');
-    console.log('✓ validateKeyTerms completed!');
-    console.log('   匹配率:', keyTermValidation.matchRate);
+    addLog('✓ validateKeyTerms completed!');
+    addLog('   匹配率: ' + keyTermValidation.matchRate);
     
     // 生成词云数据 - 增加词的数量以减少稀疏感
-    console.log('5. 开始生成词云数据...');
+    addLog('5. 开始生成词云数据...');
     const wordCloudData = keywordFrequency.slice(0, 40).map(item => [item.keyword, item.count]);
-    console.log('✓ 词云数据生成完成！');
-    console.log('   词云数据点数量:', wordCloudData.length);
+    addLog('✓ 词云数据生成完成！');
+    addLog('   词云数据点数量: ' + wordCloudData.length);
     
     // 生成置信度评分（基于多个因子）
-    console.log('6. 开始生成置信度评分...');
+    addLog('6. 开始生成置信度评分...');
     // 综合考虑一致性、相关性、关键词匹配率等因素
     const avgConsistency = evaluatedPapers.reduce((sum, paper) => sum + paper.consistency, 0) / evaluatedPapers.length;
     const avgRelevance = evaluatedPapers.reduce((sum, paper) => sum + paper.relevance, 0) / evaluatedPapers.length;
@@ -165,10 +177,10 @@ app.post('/api/analyze', async (req, res) => {
     const adjustedConfidenceScore = Math.max(0, Math.min(100, 
       Math.round(confidenceScore * hallucinationSuppressionFactor)));
     
-    console.log('✓ 置信度评分生成完成！');
-    console.log('   置信度评分:', adjustedConfidenceScore);
+    addLog('✓ 置信度评分生成完成！');
+    addLog('   置信度评分: ' + adjustedConfidenceScore);
     
-    console.log('7. 准备发送响应...');
+    addLog('7. 准备发送响应...');
     
     const responseData = {
       success: true,
@@ -179,11 +191,12 @@ app.post('/api/analyze', async (req, res) => {
         keywordFrequency,
         keyTermValidation,
         wordCloudData
-      }
+      },
+      logs: logs // 将处理日志添加到响应中
     };
     
-    console.log('✓ Response data prepared successfully');
-    console.log('   Response structure:', Object.keys(responseData.data));
+    addLog('✓ Response data prepared successfully');
+    addLog('   Response structure: [summary, confidenceScore, papers, keywordFrequency, keyTermValidation, wordCloudData]');
     
     // 发送响应
     res.json(responseData);

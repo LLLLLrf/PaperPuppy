@@ -37,128 +37,145 @@
     </div>
 
     <div v-if="isLoading" class="loading">
-      <p>正在检索文献...</p>
+      <h3>{{ currentMainStep || '正在分析研究主题...' }}</h3>
+      <p class="loading-time">{{ loadingTime.toFixed(1) }}s</p>
       <div class="spinner"></div>
+      <p class="loading-status">{{ loadingStatus || '正在准备...' }}</p>
     </div>
 
-    <div v-if="analysisResult" class="results-section">
-      <div class="summary-card">
-        <h2>研究综述</h2>
-        <div class="summary-content" v-html="formattedSummary"></div>
+    <div v-else>
+      <!-- 调试信息 -->
+      <div class="debug-info" v-if="false">
+        <p>analysisResult: {{ analysisResult }}</p>
+        <p>error: {{ error }}</p>
+        <p>recentOpenAlexPapers.length: {{ recentOpenAlexPapers.length }}</p>
+        <p>recentArxivPapers.length: {{ recentArxivPapers.length }}</p>
+        <p>isLoadingRecentPapers: {{ isLoadingRecentPapers }}</p>
+        <p>recentPapersError: {{ recentPapersError }}</p>
+        <p>currentPaperSource: {{ currentPaperSource }}</p>
+      </div>
+      <!-- 研究综述结果 - 只在有分析结果时显示 -->
+      <div v-if="analysisResult" class="results-section">
+        <div class="summary-card">
+          <h2>研究综述</h2>
+          <div class="summary-content" v-html="formattedSummary"></div>
+          
+          <div class="confidence-score">
+            <h3>置信度评分: {{ confidenceScore }}%</h3>
+            <div class="score-bar">
+              <div class="score-fill" :style="{ width: confidenceScore + '%' }"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="literature-section">
+          <h2>相关文献</h2>
+          <div class="literature-controls">
+            <select v-model="sortOption" class="sort-select">
+              <option value="relevance">按相关性排序</option>
+              <option value="year">按年份排序</option>
+              <option value="consistency">按一致性排序</option>
+            </select>
+          </div>
+          <div class="literature-list">
+            <div 
+              v-for="(paper, index) in sortedPapers" 
+              :key="index" 
+              class="paper-card"
+            >
+              <h3>
+                <a :href="paper.url" target="_blank" rel="noopener noreferrer" class="paper-link">
+                  {{ paper.title }}
+                </a>
+              </h3>
+              <p class="authors">{{ paper.authors }}</p>
+              <p class="abstract">{{ paper.abstract }}</p>
+              <div class="paper-meta">
+                <span class="year">{{ paper.year }}</span>
+                <span class="source">来源: {{ paper.source }}</span>
+                <span class="consistency">一致性: {{ paper.consistency.toFixed(2) }}%</span>
+                <span class="relevance">相关性: {{ paper.relevance.toFixed(2) }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 研究时间轴 -->
+        <ResearchTimeline :papers="papers" />
+
+        <!-- 主题结构图谱 -->
+        <TopicGraph :papers="papers" />
         
-        <div class="confidence-score">
-          <h3>置信度评分: {{ confidenceScore }}%</h3>
-          <div class="score-bar">
-            <div class="score-fill" :style="{ width: confidenceScore + '%' }"></div>
-          </div>
+        <!-- 幻觉控制机制 -->
+        <HallucinationControl 
+          :confidence-score="confidenceScore" 
+          :key-term-validation="analysisResult.keyTermValidation" 
+          :word-cloud-data="analysisResult.wordCloudData"
+        />
+
+        <div class="export-section">
+          <button @click="exportMarkdown" class="export-btn" :disabled="isExporting">
+            {{ isExporting ? '导出中...' : '导出Markdown' }}
+          </button>
+          <button @click="exportPDF" class="export-btn" :disabled="isExporting">
+            {{ isExporting ? '导出中...' : '导出PDF (jsPDF)' }}
+          </button>
+          <button @click="exportPDFWithHtml2Canvas" class="export-btn" :disabled="isExporting">
+            {{ isExporting ? '导出中...' : '导出PDF (html2pdf)' }}
+          </button>
+          <button @click="exportMarkdownAsPDF" class="export-btn" :disabled="isExporting">
+            {{ isExporting ? '导出中...' : '导出Markdown为PDF' }}
+          </button>
         </div>
       </div>
 
-      <div class="literature-section">
-      <h2>相关文献</h2>
-      <div class="literature-controls">
-        <select v-model="sortOption" class="sort-select">
-          <option value="relevance">按相关性排序</option>
-          <option value="year">按年份排序</option>
-          <option value="consistency">按一致性排序</option>
-        </select>
+      <!-- 错误信息 -->
+      <div v-else-if="error" class="error">
+        <p>{{ error }}</p>
       </div>
-      <div class="literature-list">
-        <div 
-          v-for="(paper, index) in sortedPapers" 
-          :key="index" 
-          class="paper-card"
-        >
-          <h3>
-            <a :href="paper.url" target="_blank" rel="noopener noreferrer" class="paper-link">
-              {{ paper.title }}
-            </a>
-          </h3>
-          <p class="authors">{{ paper.authors }}</p>
-          <p class="abstract">{{ paper.abstract }}</p>
-          <div class="paper-meta">
-            <span class="year">{{ paper.year }}</span>
-            <span class="consistency">一致性: {{ paper.consistency.toFixed(2) }}%</span>
-<span class="relevance">相关性: {{ paper.relevance.toFixed(2) }}%</span>
-          </div>
+      
+      <!-- 热点文章展示 - 只在没有分析结果和错误时显示 -->
+      <div v-else class="recent-papers-section">
+        <div class="papers-header">
+          <h2>
+            <span @click="togglePaperSource" class="source-toggle">
+              {{ currentPaperSource === 'openalex' ? 'OpenAlex' : 'arXiv' }}
+              <span class="toggle-arrow">▼</span>
+            </span>
+            {{ currentPaperSource === 'openalex' ? '近半年热点文章' : '近一周热点文章' }}
+          </h2>
         </div>
-      </div>
-    </div>
-
-    <!-- 研究时间轴 -->
-    <ResearchTimeline :papers="papers" />
-
-    <!-- 主题结构图谱 -->
-    <TopicGraph :papers="papers" />
-    
-    <!-- 幻觉控制机制 -->
-    <HallucinationControl 
-      :confidence-score="confidenceScore" 
-      :key-term-validation="analysisResult.keyTermValidation" 
-      :word-cloud-data="analysisResult.wordCloudData"
-    />
-
-    <div class="export-section">
-      <button @click="exportMarkdown" class="export-btn" :disabled="isExporting">
-        {{ isExporting ? '导出中...' : '导出Markdown' }}
-      </button>
-      <button @click="exportPDF" class="export-btn" :disabled="isExporting">
-        {{ isExporting ? '导出中...' : '导出PDF (jsPDF)' }}
-      </button>
-      <button @click="exportPDFWithHtml2Canvas" class="export-btn" :disabled="isExporting">
-        {{ isExporting ? '导出中...' : '导出PDF (html2pdf)' }}
-      </button>
-      <button @click="exportMarkdownAsPDF" class="export-btn" :disabled="isExporting">
-        {{ isExporting ? '导出中...' : '导出Markdown为PDF' }}
-      </button>
-    </div>
-    </div>
-
-    <div v-if="error" class="error">
-      <p>{{ error }}</p>
-    </div>
-    
-    <!-- 近一周热点文章展示 -->
-    <div class="recent-papers-section">
-      <div class="papers-header">
-        <h2>
-          <span @click="togglePaperSource" class="source-toggle">
-            {{ currentPaperSource === 'openalex' ? 'OpenAlex' : 'arXiv' }}
-            <span class="toggle-arrow">▼</span>
-          </span>
-          近一周热点文章
-        </h2>
-      </div>
-      
-      <div v-if="isLoadingRecentPapers" class="loading">
-        <p>正在加载热点文章...</p>
-        <div class="spinner"></div>
-      </div>
-      
-      <div v-else-if="recentPapersError" class="error">
-        <p>{{ recentPapersError }}</p>
-      </div>
-      
-      <div v-else-if="(currentPaperSource === 'openalex' && recentOpenAlexPapers.length === 0) || (currentPaperSource === 'arxiv' && recentArxivPapers.length === 0)" class="no-data">
-        <p>暂无热点文章数据</p>
-      </div>
-      
-      <div v-else class="papers-grid">
-        <div 
-          v-for="(paper, index) in (currentPaperSource === 'openalex' ? recentOpenAlexPapers : recentArxivPapers)" 
-          :key="index" 
-          class="paper-card"
-        >
-          <h3>
-            <a :href="paper.url" target="_blank" rel="noopener noreferrer" class="paper-link">
-              {{ paper.title }}
-            </a>
-          </h3>
-          <p class="authors">{{ paper.authors }}</p>
-          <div class="paper-meta">
-            <span v-if="paper.published || paper.date" class="date">{{ paper.published || paper.date }}</span>
-            <span v-if="paper.publication || paper.category" class="category">{{ paper.publication || paper.category }}</span>
-            <span v-if="currentPaperSource === 'openalex' && paper.citations" class="citations">引用量: {{ paper.citations }}</span>
+        
+        <div v-if="isLoadingRecentPapers" class="loading">
+          <p>正在加载热点文章...</p>
+          <div class="spinner"></div>
+        </div>
+        
+        <div v-else-if="recentPapersError" class="error">
+          <p>{{ recentPapersError }}</p>
+        </div>
+        
+        <div v-else-if="(currentPaperSource === 'openalex' && recentOpenAlexPapers.length === 0) || (currentPaperSource === 'arxiv' && recentArxivPapers.length === 0)" class="no-data">
+          <p>暂无热点文章数据</p>
+        </div>
+        
+        <div v-else class="papers-grid">
+          <div 
+            v-for="(paper, index) in (currentPaperSource === 'openalex' ? recentOpenAlexPapers : recentArxivPapers)" 
+            :key="index" 
+            class="paper-card"
+          >
+            <h3>
+              <a :href="paper.url" target="_blank" rel="noopener noreferrer" class="paper-link">
+                {{ paper.title }}
+              </a>
+            </h3>
+            <p class="authors">{{ paper.authors }}</p>
+            <div class="paper-meta">
+              <span v-if="paper.published || paper.date" class="date">{{ paper.published || paper.date }}</span>
+              <span v-if="paper.publication || paper.category" class="category">{{ paper.publication || paper.category }}</span>
+              <span v-if="currentPaperSource === 'openalex' && paper.citations" class="citations">引用量: {{ paper.citations }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -191,7 +208,14 @@ const originalSummary = ref('') // 存储原文
 const translatedSummary = ref('') // 存储翻译后的文本
 const currentLanguage = ref('en') // 当前显示的语言
 
-// 近一周热点文章相关数据
+// 加载计时相关
+const loadingTime = ref(0) // 加载时间（秒）
+const loadingStatus = ref('') // 当前加载状态
+const processingLogs = ref([]) // 处理过程日志
+const currentMainStep = ref('') // 当前主要步骤（显示在h3标签中）
+let loadingTimer = null // 计时器引用
+
+// 热点文章相关数据
 const recentArxivPapers = ref([])
 const recentOpenAlexPapers = ref([])
 const isLoadingRecentPapers = ref(false)
@@ -226,6 +250,70 @@ const sortedPapers = computed(() => {
   }
 })
 
+// 日志解析函数（模拟实时更新）
+const parseProcessingLogs = (logs) => {
+    console.log('parseProcessingLogs called with logs:', logs);
+    
+    // 如果没有日志，直接结束
+    if (!logs || logs.length === 0) {
+      console.log('No logs to process');
+      setTimeout(() => {
+        currentMainStep.value = '';
+        loadingStatus.value = '';
+        isLoading.value = false;
+      }, 1000);
+      return;
+    }
+    
+    // 定义大步骤的模式
+    const mainStepPatterns = [
+      /^Request body:/, // 请求体信息
+      /^Processing \d+ papers/, // 处理论文
+      /^\d+\. 开始调用/, // 开始调用函数
+      /^✓ .* completed/, // 函数完成
+      /^\d+\. 开始生成/, // 开始生成
+      /^✓ .* 生成完成/, // 生成完成
+      /^7\. 准备发送响应/, // 准备响应
+      /^✓ Response data prepared successfully/ // 响应准备完成
+    ];
+
+    // 使用定时器逐行显示日志，模拟实时更新
+    let logIndex = 0;
+    const logInterval = setInterval(() => {
+      if (logIndex < logs.length) {
+        const log = logs[logIndex];
+        console.log(`Processing log ${logIndex + 1}/${logs.length}:`, log);
+        
+        // 检查是否是大步骤
+        const isMainStep = mainStepPatterns.some(pattern => pattern.test(log));
+        
+        if (isMainStep) {
+          // 更新主要步骤
+          currentMainStep.value = log;
+          // 清空细节步骤，因为大步骤已经说明了当前正在做什么
+          loadingStatus.value = '';
+          console.log('Updated currentMainStep:', currentMainStep.value);
+        } else {
+          // 更新细节步骤
+          loadingStatus.value = log;
+          console.log('Updated loadingStatus:', loadingStatus.value);
+        }
+        logIndex++;
+      } else {
+        // 所有日志显示完毕，清除定时器并延迟隐藏loading组件
+        clearInterval(logInterval);
+        console.log('All logs processed');
+        // 延迟1秒后重置加载状态并隐藏loading组件，让用户有足够时间看到完整日志
+        setTimeout(() => {
+          currentMainStep.value = '';
+          loadingStatus.value = '';
+          isLoading.value = false;
+          console.log('Reset loading state');
+        }, 1000);
+      }
+    }, 200); // 每200毫秒显示一条日志
+  }
+
 // 方法
 const analyzeResearch = async () => {
   if (!searchQuery.value.trim()) {
@@ -235,6 +323,21 @@ const analyzeResearch = async () => {
 
   isLoading.value = true
   error.value = ''
+  
+  // 初始化加载计时
+  loadingTime.value = 0
+  currentMainStep.value = 'Searching from arXiv and Google Scholar…'
+  loadingStatus.value = ''
+  
+  // 清除之前的定时器
+  if (loadingTimer) {
+    clearInterval(loadingTimer)
+  }
+  
+  // 启动定时器，每100毫秒更新一次加载时间
+  loadingTimer = setInterval(() => {
+    loadingTime.value += 0.1
+  }, 100)
   
   // 用于取消请求的控制器
   let searchController, analyzeController;
@@ -251,13 +354,16 @@ const analyzeResearch = async () => {
     }, 45000); // 45秒超时
     
     // 调用后端搜索API，增加论文数量以提取更多关键词
-    const searchResponse = await fetch(`http://localhost:3001/api/search?query=${encodeURIComponent(searchQuery.value)}&maxResults=10`, {
+    currentMainStep.value = 'Searching from arXiv and Google Scholar…'
+    loadingStatus.value = '正在搜索相关论文...'
+    const searchResponse = await fetch(`/api/search?query=${encodeURIComponent(searchQuery.value)}&maxResults=16`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       },
       signal: searchController.signal
     });
+    loadingStatus.value = '搜索完成，正在准备分析...'
     console.log('search finished');
     
     clearTimeout(searchTimeout); // 清除超时定时器
@@ -268,6 +374,15 @@ const analyzeResearch = async () => {
     }
     
     const searchData = await searchResponse.json()
+    
+    // 更新加载状态
+    const requestBody = { 
+      papersCount: searchData.data.length, 
+      query: searchQuery.value, 
+      language: currentLanguage.value 
+    };
+    currentMainStep.value = `Analyze by request body: ${JSON.stringify(requestBody)}`
+    loadingStatus.value = ''
     
     if (!searchData.success) {
       throw new Error('搜索失败: ' + searchData.error);
@@ -293,11 +408,18 @@ const analyzeResearch = async () => {
       console.log('Analysis request timed out after 300 seconds');
       error.value = '分析请求超时，请稍后重试';
       isLoading.value = false;
+      currentMainStep.value = '';
+      loadingStatus.value = '';
     }, 300000); // 300秒超时
+    
+    // 更新加载状态
+    currentMainStep.value = `Processing ${formattedPapers.length} papers (out of ${formattedPapers.length} total)…`
+    loadingStatus.value = '正在准备分析请求...'
     
     // 调用后端分析API，传递当前选择的语言
     console.log("start analysing");
-    const analyzeResponse = await fetch('http://localhost:3001/api/analyze', {
+    loadingStatus.value = '正在发送分析请求...'
+    const analyzeResponse = await fetch('/api/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -309,6 +431,7 @@ const analyzeResearch = async () => {
       }),
       signal: analyzeController.signal
     });
+    loadingStatus.value = '正在接收分析结果...'
     
     clearTimeout(analyzeTimeout); // 清除超时定时器
     
@@ -319,48 +442,88 @@ const analyzeResearch = async () => {
     
     const analyzeData = await analyzeResponse.json()
     
-    if (!analyzeData.success) {
-      throw new Error('分析失败: ' + analyzeData.error);
+    // 只有当分析成功时才更新analysisResult
+    if (analyzeData.success) {
+      // 更新数据
+      analysisResult.value = {
+        summary: analyzeData.data.summary || '暂无综述信息',
+        keywordFrequency: analyzeData.data.keywordFrequency || [],
+        keyTermValidation: analyzeData.data.keyTermValidation || {},
+        wordCloudData: analyzeData.data.wordCloudData || []
+      }
+      
+      // 确保重置翻译状态和语言设置
+      isTranslated.value = false
+      originalSummary.value = ''
+      currentLanguage.value = 'en'
+      
+      papers.value = analyzeData.data.papers || []
+      
+      confidenceScore.value = analyzeData.data.confidenceScore || 0
+      
+      // 接收后端返回的处理日志
+      console.log('Received analyzeData:', analyzeData);
+      if (analyzeData.logs && Array.isArray(analyzeData.logs)) {
+        console.log('Received logs from server:', analyzeData.logs);
+        processingLogs.value = analyzeData.logs
+        
+        // 立即开始处理日志，显示服务器返回的步骤
+        parseProcessingLogs(analyzeData.logs)
+      } else {
+        console.log('No logs received from server or logs is not an array');
+        // 如果没有日志，仍然执行parseProcessingLogs以确保加载状态被正确重置
+        parseProcessingLogs([])
+      }
+      
+      error.value = '' // 清除任何之前的错误信息
+    } else {
+      // 分析失败时，设置error并清除analysisResult
+      error.value = '分析失败: ' + (analyzeData.error || '未知错误')
+      analysisResult.value = null
+      papers.value = []
+      confidenceScore.value = 0
+      console.error('Analysis failed:', analyzeData.error)
+      
+      // 分析失败时，重置加载状态
+      isLoading.value = false
+      currentMainStep.value = ''
+      loadingStatus.value = ''
     }
-    
-    // 更新数据
-    analysisResult.value = {
-      summary: analyzeData.data.summary,
-      keywordFrequency: analyzeData.data.keywordFrequency,
-      keyTermValidation: analyzeData.data.keyTermValidation,
-      wordCloudData: analyzeData.data.wordCloudData
-    }
-    
-    // 确保重置翻译状态和语言设置
-    isTranslated.value = false
-    originalSummary.value = ''
-    currentLanguage.value = 'en'
-    
-    papers.value = analyzeData.data.papers
-    
-    confidenceScore.value = analyzeData.data.confidenceScore
   } catch (err) {
     console.error('Analysis error:', err);
     
     // 更详细的错误处理
+    let errorMessage;
     if (err.name === 'AbortError') {
-      error.value = '请求超时，请检查网络连接或稍后重试。如果您正在使用代理，请确保代理设置正确。';
+      errorMessage = '请求超时，请检查网络连接或稍后重试。如果您正在使用代理，请确保代理设置正确。';
     } else if (err.message.includes('Failed to fetch')) {
-      error.value = '网络连接失败，请检查您的网络设置或代理配置。';
+      errorMessage = '网络连接失败，请检查您的网络设置或代理配置。';
     } else {
       // 显示具体的错误信息
-      error.value = err.message || '分析过程中发生未知错误';
+      errorMessage = err.message || '分析过程中发生未知错误';
     }
+    
+    error.value = errorMessage;
+    
+    // 在错误情况下，清除analysisResult以确保显示错误信息或热点文章
+    analysisResult.value = null;
+    papers.value = [];
+    confidenceScore.value = 0;
     
     // 确保在错误情况下隐藏加载状态
     isLoading.value = false;
+    currentMainStep.value = '';
+    loadingStatus.value = '';
     isTranslating.value = false;
     isExporting.value = false;
   } finally {
     // 确保清除所有超时和加载状态
     if (searchTimeout) clearTimeout(searchTimeout);
     if (analyzeTimeout) clearTimeout(analyzeTimeout);
-    isLoading.value = false;
+    if (loadingTimer) {
+      clearInterval(loadingTimer);
+      loadingTimer = null;
+    }
   }
 }
 
@@ -1052,6 +1215,7 @@ const translateSummary = async () => {
   
   try {
     // 调用后端翻译API
+    const targetLanguage = currentLanguage.value === 'en' ? 'zh' : 'en';
     const response = await fetch('/api/translate', {  // 使用相对路径，通过代理转发
       method: 'POST',
       headers: {
@@ -1086,32 +1250,38 @@ const translateSummary = async () => {
   }
 }
 
-// 获取近一周OpenAlex热点文章
+// 获取近半年OpenAlex热点文章
 const fetchRecentOpenAlexPapers = async () => {
+  console.log('Starting to fetch OpenAlex papers...')
   isLoadingRecentPapers.value = true
   recentPapersError.value = ''
   
   try {
-    // 调用后端API获取近一周热点文章
-    const response = await fetch('http://localhost:3001/api/openalex/recent', {
+    // 调用后端API获取OpenAlex热点文章
+    const response = await fetch('/api/openalex/recent', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       }
     })
     
+    console.log('OpenAlex API response status:', response.status)
     const data = await response.json()
+    console.log('OpenAlex API response data:', data)
     
     if (!data.success) {
       throw new Error(data.error || '获取OpenAlex热点文章失败')
     }
     
     recentOpenAlexPapers.value = data.papers
+    console.log('OpenAlex papers loaded:', recentOpenAlexPapers.value.length)
   } catch (err) {
     console.error('Error fetching OpenAlex papers:', err)
     recentPapersError.value = err.message || '获取OpenAlex热点文章失败'
+    console.log('Recent papers error:', recentPapersError.value)
   } finally {
     isLoadingRecentPapers.value = false
+    console.log('OpenAlex fetch completed, loading status:', isLoadingRecentPapers.value)
   }
 }
 
@@ -1137,7 +1307,7 @@ const fetchRecentArxivPapers = async () => {
   
   try {
     // 调用后端API获取近一周热点文章
-    const response = await fetch('http://localhost:3001/api/arxiv/recent', {
+    const response = await fetch('/api/arxiv/recent', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -1161,6 +1331,8 @@ const fetchRecentArxivPapers = async () => {
 
 // 组件挂载时获取默认源的论文
 onMounted(() => {
+  console.log('Component mounted, fetching recent papers...')
+  console.log('Current paper source:', currentPaperSource.value)
   if (currentPaperSource.value === 'openalex') {
     fetchRecentOpenAlexPapers()
   } else {
@@ -1188,12 +1360,21 @@ onMounted(() => {
   justify-content: center;
   gap: 20px;
   margin-bottom: 15px;
+  /* width: 100%; */
+  width: 300px;
+  margin: 0 auto;
+  /* background-color: #0066cc; */
+  position: relative;
 }
 
 .logo {
   height: 80px;
   width: auto;
   object-fit: contain;
+  position: absolute;
+  right: 100%;
+  margin-right: 50px;
+  border-radius: 9999px;
 }
 
 .brand-name {
@@ -1254,7 +1435,7 @@ onMounted(() => {
 }
 
 .search-button:hover:not(:disabled) {
-  background-color: #359c6d;
+  background-color: #4a79ca;
 }
 
 .search-button:disabled {
@@ -1265,6 +1446,19 @@ onMounted(() => {
 .loading {
   text-align: center;
   padding: 30px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.loading h3 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.loading-time {
+  margin-bottom: 20px;
+  color: #666;
+  font-size: 14px;
 }
 
 .spinner {
@@ -1275,10 +1469,41 @@ onMounted(() => {
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 20px auto;
+  margin-bottom: 30px;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.processing-steps {
+  margin-top: 30px;
+  text-align: left;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.step-item {
+  display: flex;
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+
+.step-number {
+  font-weight: bold;
+  color: #4ca3ce;
+  margin-right: 10px;
+  min-width: 20px;
+}
+
+.step-content {
+  flex: 1;
+  color: #333;
+  line-height: 1.5;
 }
 
 .results-section {
@@ -1371,6 +1596,11 @@ onMounted(() => {
   margin-bottom: 10px;
   font-size: 18px;
   color: #333;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .paper-card .authors {
@@ -1378,6 +1608,11 @@ onMounted(() => {
   font-size: 14px;
   color: #666;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .paper-card .paper-meta {
@@ -1499,7 +1734,7 @@ onMounted(() => {
   display: inline-flex;
   border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  /* box-shadow: 0 2px 4px rgba(0,0,0,0.1); */
 }
 
 .lang-btn {
