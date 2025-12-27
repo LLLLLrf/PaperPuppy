@@ -105,6 +105,7 @@ graph LR
 ### 环境要求
 - Node.js >= 14.0.0
 - npm >= 6.0.0
+- (ChatAnywhere API密钥)[https://github.com/chatanywhere/GPT_API_free]
 
 ### 安装步骤
 
@@ -116,7 +117,7 @@ cd PaperPuppy
 
 2. 设置环境变量：
 ```bash
-# 在server/.env文件中设置ChatAnywhere API密钥
+# 新建server/.env文件并根据env.example设置ChatAnywhere API密钥
 CHATANYWHERE_API_KEY=your_api_key_here
 ```
 
