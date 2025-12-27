@@ -105,7 +105,7 @@ graph LR
 ### 环境要求
 - Node.js >= 14.0.0
 - npm >= 6.0.0
-- (ChatAnywhere API密钥)[https://github.com/chatanywhere/GPT_API_free]
+- [ChatAnywhere API密钥](https://github.com/chatanywhere/GPT_API_free)
 
 ### 安装步骤
 
