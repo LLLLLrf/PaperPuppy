@@ -28,13 +28,6 @@
 - **增强关键词验证**：改进了关键术语匹配验证机制，提高结果的可信度和相关性
 - **优化资源管理**：实现了更高效的内存管理策略，确保系统在处理大量文献时仍能保持良好性能
 
-## 技术栈
-
-- 前端：Vue 3 + Vite
-- 后端：Node.js/Express
-- AI 模型：GPT-3.5-Turbo (ChatAnywhere API)
-- 文献检索：arXiv API, Google Scholar API
-- 可视化：词云、时间轴、主题图谱
 
 ## 系统架构
 
@@ -64,6 +57,14 @@ graph LR
         scholar[Scholar API]
     end
 ```
+
+## 技术栈
+
+- 前端：Vue 3 + Vite + Electron
+- 后端：Node.js/Express
+- AI 模型：GPT-3.5-Turbo (ChatAnywhere API)
+- 文献检索：arXiv API, Google Scholar API
+- 可视化：词云、时间轴、主题图谱
 
 ## 目录结构
 
