@@ -135,7 +135,7 @@ def main():
     
     if not results:
         print("未找到任何结果")
-        sys.exit(1)
+        # sys.exit(1)
     
     # 输出JSON结果
     print("\n搜索结果 (JSON格式):")
@@ -148,6 +148,34 @@ def main():
     
     print(f"\n结果已保存到文件: {output_file}")
     print(f"共找到 {len(results)} 篇文章")
+
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto("https://scholar.google.com/scholar?q=mamba")
+        html = page.content()
+
+        soup = BeautifulSoup(html, 'lxml')
+        articles = soup.select('.gs_r.gs_or.gs_scl')  # 文章容器
+        print(len(articles))
+        print(articles)
+        print(11)
+        for article in articles:
+            # 提取标题和链接
+            title_element = article.select_one('.gs_rt')
+            if title_element:
+                title = title_element.text
+                link = title_element.find('a')['href'] if title_element.find('a') else ''
+            else:
+                title = ''
+                link = ''
+                print(title, link)
+                print(search_google_scholar(title))
+                print(search_google_scholar(link))
+                print(search_google_scholar(title, link))
+                
 
 if __name__ == "__main__":
     main()

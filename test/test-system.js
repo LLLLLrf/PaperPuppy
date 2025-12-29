@@ -7,7 +7,7 @@ async function testSystem() {
   // 1. 测试论文搜索功能
   console.log('1. 测试论文搜索功能...');
   try {
-    const searchResponse = await axios.get('http://localhost:3000/api/search', {
+    const searchResponse = await axios.get('http://localhost:3001/api/search', {
       params: {
         query: 'machine learning',
         maxResults: 5
@@ -28,7 +28,7 @@ async function testSystem() {
   console.log('\n2. 测试论文分析功能...');
   try {
     // 先获取一些论文用于分析
-    const searchResponse = await axios.get('http://localhost:3000/api/search', {
+    const searchResponse = await axios.get('http://localhost:3001/api/search', {
       params: {
         query: 'deep learning',
         maxResults: 3
@@ -77,7 +77,7 @@ async function testSystem() {
   // 3. 测试API文档
   console.log('\n3. 测试API文档...');
   try {
-    const docsResponse = await axios.get('http://localhost:3000/api/docs');
+    const docsResponse = await axios.get('http://localhost:3001/api/docs');
     if (docsResponse.status === 200) {
       console.log('   ✓ API文档可访问');
     } else {

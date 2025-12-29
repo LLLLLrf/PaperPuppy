@@ -42,7 +42,7 @@ Cluster them into 3–6 research themes.
 For each theme give:
 - theme_name
 - shared_method
-- representative_papers
+- representative_papers: Include the full paper titles and their URLs/links in the format "[Paper Title](URL)", separated by commas
 - differences
 - limitations
 

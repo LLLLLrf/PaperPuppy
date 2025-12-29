@@ -81,22 +81,27 @@ async function analyzePapers(papers, language = 'en') {
     
     // 第一步：将每篇论文转换为结构化的 Knowledge Card
     console.log(`Step 1: Distilling ${papers.length} papers into knowledge cards...`);
-    const cards = [];
-    for (let i = 0; i < papers.length; i++) {
-      const paper = papers[i];
+    // 使用 Promise.all 并行处理所有论文
+    const promises = papers.map(async (paper, i) => {
       try {
         console.log(`Processing paper ${i+1}/${papers.length}: ${paper.title.substring(0, 30)}...`);
         const card = await distillPaper(paper);
         // 为每个卡片添加论文标题和索引，便于后续引用
         card.title = paper.title;
         card.url = paper.url;
-        cards.push(card);
         console.log(`✓ Paper ${i+1}/${papers.length} distilled successfully`);
+        return card;
       } catch (error) {
         console.error(`✗ Error distilling paper ${i+1}/${papers.length}: ${paper.title}`, error.message);
-        // 如果一篇论文处理失败，继续处理其他论文
+        // 如果一篇论文处理失败，返回 null，后续过滤
+        return null;
       }
-    }
+    });
+
+    // 等待所有并行处理完成
+    const results = await Promise.all(promises);
+    // 过滤掉处理失败的论文（返回 null 的项）
+    const cards = results.filter(card => card !== null);
     
     console.log(`Step 1 completed: ${cards.length} knowledge cards created`);
     
@@ -112,12 +117,14 @@ async function analyzePapers(papers, language = 'en') {
     
     // 第三步：根据主题生成正式的学术综述
     console.log('Step 3: Writing academic survey based on themes...');
-    const survey = await writeSurvey(themes, language);
+    const surveyResult = await writeSurvey(themes, language);
     console.log('✓ Step 3 completed: Academic survey written successfully');
     console.log('After survey writing memory usage:', JSON.stringify(process.memoryUsage()));
+    console.log('✓ Confidence evaluation result:', JSON.stringify(surveyResult.confidence, null, 2));
     
     console.log('=== analyzePapers END ===');
-    return survey;
+    // 返回包含综述和置信度评价的对象
+    return surveyResult;
   } catch (error) {
     console.error('=== ERROR in analyzePapers ===', error);
     console.error('Error stack:', error.stack);
@@ -152,18 +159,34 @@ function evaluateConsistency(papers, query = '') {
     
     // 2. 基于年份的新颖性评估（较新的论文可能更有价值）
     const currentYear = new Date().getFullYear();
-    // 确保paper.year是有效的数字
+    // 确保paper.year是有效的数字，且不大于当前年份
     let yearScore = 50; // 默认值
-    if (paper.year) {
-      const paperYear = parseInt(paper.year, 10);
-      if (!isNaN(paperYear) && paperYear > 1900 && paperYear <= currentYear) {
-        yearScore = Math.max(0, Math.min(100, 100 - (currentYear - paperYear) * 5));
+    let processedYear = paper.year;
+    
+    if (processedYear) {
+      const paperYear = parseInt(processedYear, 10);
+      if (!isNaN(paperYear)) {
+        if (paperYear > currentYear) {
+          // 如果年份大于当前年份，设置为Unknown
+          processedYear = "Unknown";
+        } else if (paperYear > 1900 && paperYear <= currentYear) {
+          yearScore = Math.max(0, Math.min(100, 100 - (currentYear - paperYear) * 5));
+        } else {
+          // 如果年份无效（如小于1900），也设置为Unknown
+          processedYear = "Unknown";
+        }
+      } else {
+        // 如果无法解析为数字，设置为Unknown
+        processedYear = "Unknown";
       }
+    } else {
+      // 如果没有年份信息，设置为Unknown
+      processedYear = "Unknown";
     }
     
     // 3. 基于作者数量的合作质量评估（适中的作者数量通常表示较好的合作）
     const authorsCount = paper.authors ? paper.authors.split(',').length : 1;
-    const authorScore = Math.max(0, Math.min(100, 100 - Math.abs(authorsCount - 3) * 10));
+    const authorScore = Math.max(0, Math.min(100, 100 - Math.abs(authorsCount - 4) * 10));
     
     // 4. 基于标题和摘要的关键词密度评估
     const text = `${paper.title} ${paper.abstract}`.toLowerCase();
@@ -229,6 +252,7 @@ function evaluateConsistency(papers, query = '') {
     
     return {
       ...paper,
+      year: processedYear, // 使用处理后的年份（可能是"Unknown"）
       consistency: Math.max(0, Math.min(100, consistency)), // 确保在0-100范围内
       relevance: Math.max(0, Math.min(100, relevance)) // 确保在0-100范围内
     };
@@ -349,7 +373,7 @@ function validateKeyTerms(papers, query) {
       totalOccurrences,
       paperMatchRate: Math.round(paperMatchRate),
       avgFrequency: Math.round(avgFrequency * 100) / 100,
-      isWellMatched: paperMatchRate >= 50 // 至少50%的论文包含该关键词才认为是良好匹配
+      isWellMatched: paperMatchRate >= 70 // 至少70%的论文包含该关键词才认为是良好匹配
     };
   });
   

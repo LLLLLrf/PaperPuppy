@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const { searchPapers: searchArxivPapers } = require('./arxivClient');
 const { searchPapers: searchGoogleScholarPapers } = require('./googleScholarClient');
+const { searchPapers: searchSemanticScholarPapers } = require('./semanticScholarClient');
 const { analyzePapers, evaluateConsistency, calculateKeywordFrequency, validateKeyTerms } = require('./chatAnywhereClient');
 const { getRecentPapers: getRecentOpenAlexPapers } = require('./openAlexClient'); // 保留用于热点文章
 
@@ -11,7 +12,7 @@ const PORT = process.env.PORT || 3001; // 修改端口为3001
 
 // 中间件
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'file://'],
   credentials: true
 }));
 app.use(express.json());
@@ -38,8 +39,18 @@ app.get('/api/search', async (req, res) => {
       searchGoogleScholarPapers(query, googleScholarCount)
     ]);
     
+    // 如果Google Scholar返回0篇文章，使用Semantic Scholar替代
+    let backupPapers = [];
+    let backupSource = 'none';
+    
+    if (googleScholarPapers.length === 0) {
+      backupPapers = await searchSemanticScholarPapers(query, googleScholarCount);
+      backupSource = 'semanticScholar';
+      console.log(`Google Scholar returned 0 papers, using Semantic Scholar instead (found ${backupPapers.length} papers)`);
+    }
+    
     // 合并结果
-    const papers = [...arxivPapers, ...googleScholarPapers];
+    const papers = [...arxivPapers, ...googleScholarPapers, ...backupPapers];
     
     // 按年份降序排序（如果有年份的话）
     papers.sort((a, b) => {
@@ -49,14 +60,22 @@ app.get('/api/search', async (req, res) => {
     });
     
     // 即使没有找到论文也返回成功，但data为空数组
+    // 构建sources对象
+    const sources = {
+      arxiv: arxivPapers.length,
+      googleScholar: googleScholarPapers.length
+    };
+    
+    // 如果有备用源，添加到sources
+    if (backupSource !== 'none') {
+      sources[backupSource] = backupPapers.length;
+    }
+    
     res.json({
       success: true,
       data: papers,
       total: papers.length,
-      sources: {
-        arxiv: arxivPapers.length,
-        googleScholar: googleScholarPapers.length
-      }
+      sources: sources
     });
   } catch (error) {
     console.error('Search error:', error);
@@ -97,11 +116,25 @@ app.post('/api/analyze', async (req, res) => {
   try {
     addLog('1. 开始调用 analyzePapers...');
     // 使用ChatAnywhere API分析论文（现在支持分批处理）
+    let summaryResult;
     let summary;
+    let surveyConfidence;
     try {
-      summary = await analyzePapers(limitedPapers, language);
+      summaryResult = await analyzePapers(limitedPapers, language);
       addLog('✓ analyzePapers completed!');
-      addLog('   综述长度: ' + summary.length);
+      
+      // 检查返回结果类型
+      if (typeof summaryResult === 'object' && summaryResult !== null) {
+        // 如果返回的是对象，提取综述内容和置信度信息
+        summary = summaryResult.survey;
+        surveyConfidence = summaryResult.confidence;
+        addLog('   综述长度: ' + summary.length);
+        addLog('   置信度评分: ' + (surveyConfidence?.overall_confidence || 'N/A'));
+      } else {
+        // 兼容旧的字符串返回格式
+        summary = summaryResult;
+        addLog('   综述长度: ' + summary.length);
+      }
     } catch (error) {
       console.error('✗ analyzePapers failed:', error.message);
       addLog('✗ analyzePapers failed: ' + error.message);
@@ -187,6 +220,7 @@ app.post('/api/analyze', async (req, res) => {
       data: {
         summary,
         confidenceScore: adjustedConfidenceScore,
+        surveyConfidence: surveyConfidence, // AI生成的置信度评价
         papers: evaluatedPapers,
         keywordFrequency,
         keyTermValidation,

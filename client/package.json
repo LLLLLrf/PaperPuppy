@@ -19,16 +19,21 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "src/assets/logo_white.jpg"
     ],
+    "icon": "src/assets/logo_white.jpg",
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "src/assets/logo_white.jpg"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/assets/logo_white.jpg"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "src/assets/logo_white.jpg"
     }
   },
   "dependencies": {

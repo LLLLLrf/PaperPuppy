@@ -36,7 +36,7 @@ async function getRecentPapers(maxResults = 30) {
     // 恢复日期过滤，使用正确的格式
     // 使用AND连接多个过滤条件（OpenAlex API要求）
     const params = {
-      'filter': `from_publication_date:${fromDate}`,
+      'filter': `from_publication_date:${fromDate},to_publication_date:${toDate}`,
       'sort': 'cited_by_count:desc',
       'per-page': maxResults * 2, // 请求更多数据，以便过滤后仍有足够结果
       'select': 'display_name,authorships,cited_by_count,primary_location,publication_date,publication_year'

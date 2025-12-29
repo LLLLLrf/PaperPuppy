@@ -93,6 +93,9 @@
               <div class="paper-meta">
                 <span class="year">{{ paper.year }}</span>
                 <span class="source">来源: {{ paper.source }}</span>
+                <span v-if="paper.citationCount || paper.citations" class="citations">
+                  引用量: {{ paper.citationCount || paper.citations }}
+                </span>
                 <span class="consistency">一致性: {{ paper.consistency.toFixed(2) }}%</span>
                 <span class="relevance">相关性: {{ paper.relevance.toFixed(2) }}%</span>
               </div>
@@ -356,7 +359,7 @@ const analyzeResearch = async () => {
     // 调用后端搜索API，增加论文数量以提取更多关键词
     currentMainStep.value = 'Searching from arXiv and Google Scholar…'
     loadingStatus.value = '正在搜索相关论文...'
-    const searchResponse = await fetch(`/api/search?query=${encodeURIComponent(searchQuery.value)}&maxResults=16`, {
+    const searchResponse = await fetch(`${API_BASE_URL}/search?query=${encodeURIComponent(searchQuery.value)}&maxResults=16`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -419,7 +422,7 @@ const analyzeResearch = async () => {
     // 调用后端分析API，传递当前选择的语言
     console.log("start analysing");
     loadingStatus.value = '正在发送分析请求...'
-    const analyzeResponse = await fetch('/api/analyze', {
+    const analyzeResponse = await fetch(`${API_BASE_URL}/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1216,7 +1219,7 @@ const translateSummary = async () => {
   try {
     // 调用后端翻译API
     const targetLanguage = currentLanguage.value === 'en' ? 'zh' : 'en';
-    const response = await fetch('/api/translate', {  // 使用相对路径，通过代理转发
+    const response = await fetch(`${API_BASE_URL}/translate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1250,6 +1253,10 @@ const translateSummary = async () => {
   }
 }
 
+// API基础URL配置
+const API_BASE_URL = import.meta.env.MODE === 'electron' ? 'http://localhost:3001/api' : '/api';
+console.log('API_BASE_URL:', API_BASE_URL);
+
 // 获取近半年OpenAlex热点文章
 const fetchRecentOpenAlexPapers = async () => {
   console.log('Starting to fetch OpenAlex papers...')
@@ -1258,7 +1265,7 @@ const fetchRecentOpenAlexPapers = async () => {
   
   try {
     // 调用后端API获取OpenAlex热点文章
-    const response = await fetch('/api/openalex/recent', {
+    const response = await fetch(`${API_BASE_URL}/openalex/recent`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -1307,7 +1314,7 @@ const fetchRecentArxivPapers = async () => {
   
   try {
     // 调用后端API获取近一周热点文章
-    const response = await fetch('/api/arxiv/recent', {
+    const response = await fetch(`${API_BASE_URL}/arxiv/recent`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

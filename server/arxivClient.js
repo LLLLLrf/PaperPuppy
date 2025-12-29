@@ -7,7 +7,7 @@ const ARXIV_API_BASE = 'https://export.arxiv.org/api/query';
 // 创建带有代理的axios实例
 const createAxiosInstance = () => {
   const config = {
-    timeout: 30000, // 设置为30秒超时
+    timeout: 60000, // 增加到60秒超时
     headers: {
       'User-Agent': 'ResearchAnalyzer/1.0 (research.analyzer@example.com)'
     }
@@ -39,7 +39,15 @@ function buildArxivQuery(searchTerm, maxResults = 10) {
   // 当搜索词为空时，使用默认搜索条件 (cs.AI = Artificial Intelligence)，避免生成无效参数
   let searchQuery;
   if (typeof searchTerm === 'string' && searchTerm.trim()) {
-    searchQuery = `all:${searchTerm}`;
+    const trimmedSearchTerm = searchTerm.trim();
+    // 检查是否包含空格，如果包含则使用引号包裹短语搜索
+    if (trimmedSearchTerm.includes(' ')) {
+      // 对于包含空格的短语，使用引号包裹以确保精确匹配
+      searchQuery = `all:"${trimmedSearchTerm}"`;
+    } else {
+      // 对于单个词，直接搜索
+      searchQuery = `all:${trimmedSearchTerm}`;
+    }
   } else {
     searchQuery = 'cat:cs.AI';
   }

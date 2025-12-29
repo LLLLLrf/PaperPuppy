@@ -99,7 +99,7 @@ const hoveredPaper = ref(null)
 const getYearRange = () => {
   const years = props.papers
     .map(p => p.year)
-    .filter(y => y)
+    .filter(y => y && y !== 'Unknown' && !isNaN(parseInt(y)))
     .map(y => parseInt(y))
   
   if (years.length === 0) return { min: 2000, max: 2023 }
@@ -207,7 +207,7 @@ const yAxisLabels = computed(() => {
 
 // 计算X轴位置
 const calculateXPosition = (year) => {
-  if (!year) return 5
+  if (!year || year === 'Unknown' || isNaN(parseInt(year))) return 5
   
   const { min, max } = getYearRange()
   const range = max - min

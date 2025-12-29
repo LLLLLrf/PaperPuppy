@@ -134,7 +134,7 @@ const scrollPosition = ref(0)
 // 计算属性
 const sortedPapers = computed(() => {
   return [...props.papers]
-    .filter(paper => paper.year && !isNaN(parseInt(paper.year)))
+    .filter(paper => paper.year && paper.year !== 'Unknown' && !isNaN(parseInt(paper.year)))
     .sort((a, b) => parseInt(a.year) - parseInt(b.year))
 })
 
