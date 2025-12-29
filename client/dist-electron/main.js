@@ -1,35 +1,24 @@
-import { app, BrowserWindow } from "electron";
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename$1 = fileURLToPath(import.meta.url);
-const __dirname$1 = path.dirname(__filename$1);
-function createWindow() {
-  const win = new BrowserWindow({
+import { app as e, BrowserWindow as r } from "electron";
+import n from "path";
+import { fileURLToPath as a } from "url";
+const l = a(import.meta.url), t = n.dirname(l);
+function i() {
+  const o = new r({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname$1, "preload.js"),
-      nodeIntegration: true,
-      contextIsolation: false
+      preload: n.join(t, "preload.js"),
+      nodeIntegration: !0,
+      contextIsolation: !1
     }
   });
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL);
-    win.webContents.openDevTools();
-  } else {
-    win.loadFile(path.join(__dirname$1, "../dist/index.html"));
-  }
+  process.env.VITE_DEV_SERVER_URL ? (o.loadURL(process.env.VITE_DEV_SERVER_URL), o.webContents.openDevTools()) : o.loadFile(n.join(t, "../dist/index.html"));
 }
-app.whenReady().then(() => {
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+e.whenReady().then(() => {
+  i(), e.on("activate", () => {
+    r.getAllWindows().length === 0 && i();
   });
 });
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+e.on("window-all-closed", () => {
+  process.platform !== "darwin" && e.quit();
 });
