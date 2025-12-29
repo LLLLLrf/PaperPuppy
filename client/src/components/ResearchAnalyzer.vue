@@ -145,7 +145,7 @@
               {{ currentPaperSource === 'openalex' ? 'OpenAlex' : 'arXiv' }}
               <span class="toggle-arrow">▼</span>
             </span>
-            {{ currentPaperSource === 'openalex' ? '近半年热点文章' : '近一周热点文章' }}
+            {{ currentPaperSource === 'openalex' ? '近一年热点文章' : '近一周热点文章' }}
           </h2>
         </div>
         
@@ -1257,7 +1257,7 @@ const translateSummary = async () => {
 const API_BASE_URL = import.meta.env.MODE === 'electron' ? 'http://localhost:3001/api' : '/api';
 console.log('API_BASE_URL:', API_BASE_URL);
 
-// 获取近半年OpenAlex热点文章
+// 获取近一年OpenAlex热点文章
 const fetchRecentOpenAlexPapers = async () => {
   console.log('Starting to fetch OpenAlex papers...')
   isLoadingRecentPapers.value = true
