@@ -7,3 +7,6 @@
 **/pdfs/
 **/.idea/
 **/.vscode/
+**/coverage/
+**/build/
+**/tmp/
