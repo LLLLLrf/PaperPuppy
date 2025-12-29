@@ -1253,8 +1253,11 @@ const translateSummary = async () => {
   }
 }
 
+// 导入API配置
+import API_CONFIG from '../config/apiConfig.js';
+
 // API基础URL配置
-const API_BASE_URL = import.meta.env.MODE === 'electron' ? 'http://localhost:3001/api' : '/api';
+const API_BASE_URL = API_CONFIG[import.meta.env.MODE] ? API_CONFIG[import.meta.env.MODE].baseURL : API_CONFIG.development.baseURL;
 console.log('API_BASE_URL:', API_BASE_URL);
 
 // 获取近一年OpenAlex热点文章
