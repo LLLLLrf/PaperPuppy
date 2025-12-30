@@ -62,7 +62,7 @@ graph LR
 
 ## 技术栈
 
-- 前端：Vue 3 + Vite + Electron
+- 前端：Vue 3 + Vite
 - 后端：Node.js/Express
 - AI 模型：GPT-3.5-Turbo (ChatAnywhere API)
 - 文献检索：arXiv API, Google Scholar API
