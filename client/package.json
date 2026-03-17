@@ -1,7 +1,7 @@
 {
   "name": "PaperPuppy",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -15,35 +15,51 @@
     "appId": "com.paperpuppy.app",
     "productName": "PaperPuppy",
     "directories": {
-      "output": "dist_electron"
+      "output": "dist_electron",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "src/assets/logo_white.jpg"
+      "package.json"
     ],
-    "icon": "src/assets/logo_white.jpg",
+    "icon": "public/logo_white.png",
     "mac": {
       "target": "dmg",
-      "icon": "src/assets/logo_white.jpg"
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "win": {
-      "target": "nsis",
-      "icon": "src/assets/logo_white.jpg"
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PaperPuppy"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "src/assets/logo_white.jpg"
+      "target": "AppImage"
     }
   },
   "dependencies": {
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "cors": "^2.8.5",
     "d3": "^7.9.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.12.1",
+    "https-proxy-agent": "^7.0.6",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
     "jspdf-fonts": "^0.0.2",
     "marked": "^17.0.1",
+    "pdf-parse": "^2.4.5",
+    "tiktoken": "^1.0.22",
     "vue": "^3.5.24",
     "wordcloud": "^1.2.3"
   },

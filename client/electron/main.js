@@ -30,8 +30,27 @@ function createWindow() {
   }
 }
 
-// 应用就绪后创建窗口
-app.whenReady().then(() => {
+// 应用就绪后创建窗口和启动服务器
+app.whenReady().then(async () => {
+  // 启动服务器
+  const path = await import('path');
+  const dotenv = await import('dotenv');
+  const module = await import('module');
+  
+  // 创建require函数来导入CommonJS模块
+  const require = module.createRequire(import.meta.url);
+  
+  // 加载.env文件
+  dotenv.default.config({ path: path.default.join(__dirname, 'server', '.env') });
+  
+  // 导入并启动服务器
+  try {
+    const server = require('./server/server.js');
+    console.log('Server started successfully');
+  } catch (error) {
+    console.error('Failed to start server:', error);
+  }
+  
   createWindow()
 
   // macOS下点击Dock图标时重新创建窗口

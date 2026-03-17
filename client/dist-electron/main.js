@@ -1,24 +1,32 @@
-import { app as e, BrowserWindow as r } from "electron";
-import n from "path";
-import { fileURLToPath as a } from "url";
-const l = a(import.meta.url), t = n.dirname(l);
+import { app as t, BrowserWindow as s } from "electron";
+import r from "path";
+import { fileURLToPath as c } from "url";
+const d = c(import.meta.url), n = r.dirname(d);
 function i() {
-  const o = new r({
+  const e = new s({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: n.join(t, "preload.js"),
+      preload: r.join(n, "preload.js"),
       nodeIntegration: !0,
       contextIsolation: !1
     }
   });
-  process.env.VITE_DEV_SERVER_URL ? (o.loadURL(process.env.VITE_DEV_SERVER_URL), o.webContents.openDevTools()) : o.loadFile(n.join(t, "../dist/index.html"));
+  process.env.VITE_DEV_SERVER_URL ? (e.loadURL(process.env.VITE_DEV_SERVER_URL), e.webContents.openDevTools()) : e.loadFile(r.join(n, "../dist/index.html"));
 }
-e.whenReady().then(() => {
-  i(), e.on("activate", () => {
-    r.getAllWindows().length === 0 && i();
+t.whenReady().then(async () => {
+  const e = await import("path"), a = await import("./main-HISK49CH.js").then((o) => o.m), l = (await import("module")).createRequire(import.meta.url);
+  a.default.config({ path: e.default.join(n, "server", ".env") });
+  try {
+    const o = l("./server/server.js");
+    console.log("Server started successfully");
+  } catch (o) {
+    console.error("Failed to start server:", o);
+  }
+  i(), t.on("activate", () => {
+    s.getAllWindows().length === 0 && i();
   });
 });
-e.on("window-all-closed", () => {
-  process.platform !== "darwin" && e.quit();
+t.on("window-all-closed", () => {
+  process.platform !== "darwin" && t.quit();
 });

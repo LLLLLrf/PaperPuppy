@@ -4,9 +4,11 @@
 **/dist/
 **/dist_electron/
 **/dist-electron/
+**/electron-packager/
 **/pdfs/
 **/.idea/
 **/.vscode/
 **/coverage/
 **/build/
 **/tmp/
+**/sqj_code/
